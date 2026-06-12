@@ -1164,31 +1164,7 @@ function nextChap(){if(currentChap<currentLesson.chapters.length-1){currentChap+
 // ── QUIZ ─────────────────────────────────────────────────────────
 function shuffle(arr){const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 let qQ=[],qA=[],qDone=false;
-function startQuiz(){
-  const bank=QB[currentLessonId];
-  if(!bank?.length){completedCourses.add(currentLessonId);saveCompleted();renderLearnPage();goTo('learn');return;}
-  qQ=shuffle(bank).slice(0,5);qA=new Array(qQ.length).fill(null);qDone=false;
-  document.getElementById('quiz-title').textContent=currentLesson.title+' — Quiz';
-  document.getElementById('quiz-sub').textContent='Answer all '+qQ.length+' questions. Randomised each session.';
-  document.getElementById('quiz-score').style.display='none';document.getElementById('score-extra').innerHTML='';
-  renderQuiz();goTo('quiz');
-}
-function renderQuiz(){document.getElementById('quiz-questions').innerHTML=qQ.map((q,qi)=>`<div class="quiz-q"><div class="q-text">Q${qi+1}. ${q.q}</div>${q.opts.map((o,oi)=>`<button class="quiz-opt" id="opt_${qi}_${oi}" onclick="selOpt(${qi},${oi})">${o}</button>`).join('')}<div class="q-feedback" id="fb${qi}"></div></div>`).join('')+`<div style="margin-top:8px"><button class="btn-gold" id="sub-btn" onclick="submitQuiz()">Submit quiz</button></div>`;}
-function selOpt(qi,oi){if(qDone)return;qA[qi]=oi;for(let i=0;i<qQ[qi].opts.length;i++){const b=document.getElementById(`opt_${qi}_${i}`);b.style.borderColor=i===oi?'var(--accent)':'var(--border)';b.style.color=i===oi?'var(--accent)':'var(--text)';}}
-function submitQuiz(){
-  if(qA.includes(null)){toast('Please answer all questions first.');return;}
-  qDone=true;let score=0;
-  qQ.forEach((q,qi)=>{const ok=q.a,ch=qA[qi];if(ch===ok)score++;for(let i=0;i<q.opts.length;i++){const b=document.getElementById(`opt_${qi}_${i}`);b.disabled=true;b.style.borderColor='';b.style.color='';if(i===ok)b.classList.add('correct');else if(i===ch&&ch!==ok)b.classList.add('wrong');}const fb=document.getElementById('fb'+qi);if(ch===ok){fb.textContent='✓ Correct!';fb.style.color='#5a9e6f';}else{fb.textContent='✗ '+q.opts[ok];fb.style.color='#c0504a';}});
-  document.getElementById('sub-btn').style.display='none';
-  const sc=document.getElementById('quiz-score');sc.style.display='block';
-  const pct=Math.round((score/qQ.length)*100);
-  document.getElementById('score-text').textContent=`${score}/${qQ.length} — ${pct}%`;
-  const pass=score>=3;
-  document.getElementById('score-msg').textContent=pass?(score===qQ.length?'Perfect! 🎉':'Well done! ✓ Course completed.'):'Need 3/5 to pass. Review the chapters and retry.';
-  const extra=document.getElementById('score-extra');extra.innerHTML='';
-  if(pass){completedCourses.add(currentLessonId);saveCompleted();setTimeout(()=>showCertificate(currentLesson.title),700);extra.innerHTML=`<div style="display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:5px 13px;border-radius:20px;background:rgba(90,158,111,.15);border:1px solid rgba(90,158,111,.4);color:#5a9e6f;margin-bottom:14px">✓ ${currentLesson.title} completed!</div><br>`;}
-  extra.innerHTML+=pass?`<button class="btn-gold" onclick="goTo('learn')">Back to classes</button>`:`<button class="btn-ghost" onclick="startQuiz()" style="margin-right:10px">Retry</button><button class="btn-gold" onclick="goTo('learn')">Back</button>`;
-}
+// startQuiz, renderQuiz, submitQuiz defined below (single version)
 
 // ── TEMPLATES ─────────────────────────────────────────────────────
 const TEMPLATES=[
@@ -1716,75 +1692,11 @@ QB['adaptation']=[
 {q:"What do you need to legally adapt a published book?",opts:["Nothing — all books are free to adapt","Adaptation rights — a legal agreement with the author or rights holder","Just credit the author","A large budget"],a:1},
 ];
 
-// ── LESSON LOGIC ───────────────────────────────────────────────
-let curId=null,curLesson=null,curChap=0;
-
-function openLesson(id){
-  const cat=CATALOG.find(c=>c.id===id);
-  if(!L[id]){alert('This course is coming soon!');return;}
-  curId=id;curLesson={title:cat?cat.title:id,chapters:L[id].chapters};curChap=0;
-  renderLessonPage();goTo('lesson');
-  updateReadingProgress();
-}
-
-function renderLessonPage(){
-  document.getElementById('lesson-title').textContent=curLesson.title;
-  const read=getChapRead(curId);
-  document.getElementById('chap-list').innerHTML=curLesson.chapters.map((c,i)=>
-    `<div class="chap-item ${i===curChap?'active':''} ${read.includes(i)?'read':''}" onclick="goChap(${i})">
-      <div class="chap-num">Chapter ${i+1}</div>${c.t}
-    </div>`).join('');
-  renderChap();
-}
-
-function renderChap(){
-  const ch=curLesson.chapters[curChap];
-  document.getElementById('lesson-chap-label').textContent=`Chapter ${curChap+1} of ${curLesson.chapters.length} — ${ch.t}`;
-  document.getElementById('lesson-content').innerHTML=ch.c;
-  const isLast=curChap===curLesson.chapters.length-1;
-  document.getElementById('prev-chap-btn').style.opacity=curChap===0?'0.3':'1';
-  document.getElementById('next-chap-btn').textContent=isLast?'Take the quiz →':'Next →';
-  document.querySelectorAll('.chap-item').forEach((el,i)=>el.classList.toggle('active',i===curChap));
-  document.getElementById('lesson').scrollTop=0;
-  window.scrollTo(0,0);
-  markChapRead(curId,curChap);
-  updateReadingProgress();
-  showNextRec(isLast);
-  // Refresh chap list read marks
-  const read=getChapRead(curId);
-  document.querySelectorAll('.chap-item').forEach((el,i)=>{el.classList.toggle('read',read.includes(i));});
-}
-
-function updateReadingProgress(){
-  const read=getChapRead(curId);
-  const total=curLesson.chapters.length;
-  const pct=Math.round((read.length/total)*100);
-  document.getElementById('reading-progress').style.width=pct+'%';
-}
-
-let nextRecId=null;
-function showNextRec(isLastChap){
-  if(!isLastChap){document.getElementById('next-rec').style.display='none';return;}
-  // Find next uncompleted course in same or next level
-  const cat=CATALOG.find(c=>c.id===curId);
-  const levels=['beginner','intermediate','advanced'];
-  const levelIdx=levels.indexOf(cat?.level||'beginner');
-  const remaining=CATALOG.filter(c=>!completedCourses.has(c.id)&&c.id!==curId&&levels.indexOf(c.level)>=levelIdx);
-  if(!remaining.length){document.getElementById('next-rec').style.display='none';return;}
-  const next=remaining[0];
-  nextRecId=next.id;
-  document.getElementById('next-rec-icon').textContent=next.icon;
-  document.getElementById('next-rec-title').textContent=next.title;
-  document.getElementById('next-rec').style.display='flex';
-}
-function openNextRec(){if(nextRecId)openLesson(nextRecId);}
-
-function goChap(i){curChap=i;renderChap();}
-function prevChap(){if(curChap>0){curChap--;renderChap();}}
-function nextChap(){
-  if(curChap<curLesson.chapters.length-1){curChap++;renderChap();}
-  else startQuiz();
-}
+// ── LESSON LOGIC (duplicate removed — using primary block above) ──
+// Aliases so quiz logic below can reference curId/curLesson/curChap
+Object.defineProperty(window,'curId',{get:()=>currentLessonId,set:v=>{currentLessonId=v;}});
+Object.defineProperty(window,'curLesson',{get:()=>currentLesson,set:v=>{currentLesson=v;}});
+Object.defineProperty(window,'curChap',{get:()=>currentChap,set:v=>{currentChap=v;}});
 
 // ── QUIZ LOGIC ─────────────────────────────────────────────────
 
